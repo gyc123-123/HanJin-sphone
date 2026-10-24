@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>HanJin's Phone</title>
+<style>
+    :root {
+        --ios-bg: #000;
+        --ios-text: #fff;
+        --glass-bg: rgba(255, 255, 255, 0.15);
+        --glass-border: rgba(255, 255, 255, 0.2);
+        --kakao-yellow: #fee500;
+        --insta-gradient: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+        --spotify-green: #1db954;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+    body, html { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif; background: #000; }
+    
+    /* 全局屏幕控制 */
+    .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; flex-direction: column; overflow: hidden; transition: transform 0.3s, opacity 0.3s; z-index: 10; background: #fff; }
+    .screen.active { display: flex; }
+    .dark-screen { background: #000; color: #fff; }
+
+    /* 底部横条 Home Indicator */
+    .home-indicator { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 130px; height: 5px; background: rgba(150,150,150,0.8); border-radius: 10px; z-index: 999; cursor: pointer; }
+    .home-indicator.light { background: rgba(255,255,255,0.8); }
+
+    /* ================= 1. 锁屏 ================= */
+    #lock-screen { background-size: cover; background-position: center; justify-content: center; align-items: center; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.5); z-index: 100; }
+    .lock-time { font-size: 80px; font-weight: 300; letter-spacing: 2px; }
+    .lock-date { font-size: 20px; margin-top: 5px; }
+    .lock-hint { position: absolute; bottom: 50px; font-size: 14px; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+    /* ================= 2. 桌面 ================= */
+    #home-screen { background-size: cover; background-position: center; padding: 50px 20px; }
+    .widgets { display: flex; gap: 15px; margin-bottom: 30px; margin-top: 20px; }
+    .widget { flex: 1; background: var(--glass-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 20px; padding: 15px; border: 1px solid var(--glass-border); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+    .w-weather .place { font-size: 14px; font-weight: 600; }
+    .w-weather .temp { font-size: 34px; font-weight: 300; margin: 5px 0; }
+    .w-weather .desc { font-size: 12px; }
+    .w-events .ev { margin-bottom: 8px; font-size: 12px; display: flex; gap: 5px; }
+    .w-events .ev:last-child { margin-bottom: 0; }
+    .w-events .ev .t { opacity: 0.8; }
+
+    .app-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px 15px; }
+    .app { display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: transform 0.1s; }
+    .app:active { transform: scale(0.9); }
+    .app-icon { width: 60px; height: 60px; border-radius: 15px; display: flex; justify-content: center; align-items: center; font-size: 30px; color: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.2); background-size: cover; background-position: center; }
+    .app-name { color: #fff; font-size: 11px; margin-top: 6px; text-shadow: 0 1px 2px rgba(0,0,0,0.5); text-align: center; }
+
+    .dock { position: absolute; bottom: 25px; left: 15px; right: 15px; background: var(--glass-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 30px; padding: 15px; display: flex; justify-content: space-around; border: 1px solid var(--glass-border); }
+    .dock .app-name { display: none; }
+
+    /* 通用头部 */
+    .app-header { padding: 50px 20px 15px; font-size: 18px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; border-bottom: 0.5px solid rgba(150,150,150,0.3); }
+    .app-body { flex: 1; overflow-y: auto; padding-bottom: 80px; }
+
+    /* ================= 3. 电话 ================= */
+    #app-phone { background: #f2f2f7; color: #000; }
+    .call-group { font-size: 13px; color: #888; padding: 15px 20px 5px; font-weight: 600; }
+    .call-item { display: flex; justify-content: space-between; padding: 12px 20px; border-bottom: 0.5px solid #ddd; background: #fff; }
+    .call-item.missed { color: #ff3b30; }
+    .call-item .count { color: #888; font-size: 14px; margin-left: 5px; }
+    .tab-bar { position: absolute; bottom: 0; width: 100%; height: 80px; background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); display: flex; justify-content: space-around; padding-top: 10px; border-top: 0.5px solid #ccc; }
+    .tab-item { display: flex; flex-direction: column; align-items: center; font-size: 10px; color: #888; }
+    .tab-item.active { color: #007aff; }
+    .tab-item i { font-size: 22px; margin-bottom: 4px; }
+
+    /* ================= 4. KakaoTalk ================= */
+    #app-kakao { background: #b2c7d9; }
+    .kakao-header { background: #b2c7d9; border: none; }
+    .my-profile { display: flex; align-items: center; padding: 20px; background: #b2c7d9; cursor: pointer; }
+    .profile-avatar { width: 50px; height: 50px; border-radius: 20px; background: #fff; display: flex; justify-content: center; align-items: center; font-size: 24px; margin-right: 15px; }
+    .friend-item { display: flex; align-items: center; padding: 15px 20px; background: #b2c7d9; border-bottom: 0.5px solid rgba(0,0,0,0.05); cursor: pointer; }
+    
+    .chat-room { background: #b2c7d9; display: flex; flex-direction: column; }
+    .chat-messages { flex: 1; padding: 20px; overflow-y: auto; }
+    .msg-row { display: flex; margin-bottom: 15px; align-items: flex-start; }
+    .msg-row.me { justify-content: flex-end; }
+    .msg-bubble { max-width: 75%; padding: 10px 14px; border-radius: 15px; font-size: 15px; background: #fff; position: relative; word-break: break-all; }
+    .msg-row.me .msg-bubble { background: var(--kakao-yellow); }
+    .msg-info { display: flex; flex-direction: column; justify-content: flex-end; margin: 0 5px; font-size: 10px; color: #555; }
+    .date-divider { text-align: center; font-size: 11px; color: #666; margin: 15px 0; }
+    .date-divider span { background: rgba(0,0,0,0.1); padding: 3px 10px; border-radius: 10px; }
+    
+    .chat-input-area { display: flex; padding: 10px; background: #fff; align-items: center; }
+    .chat-input-area input { flex: 1; border: none; outline: none; font-size: 15px; padding: 10px; }
+    .chat-input-area button { background: var(--kakao-yellow); border: none; padding: 8px 15px; border-radius: 5px; font-weight: bold; cursor: pointer; }
+
+    /* ================= 5. X (Twitter) ================= */
+    #app-x { background: #000; color: #fff; }
+    #app-x .app-header { border-bottom: 1px solid #333; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 10; }
+    .x-profile { padding: 20px; border-bottom: 1px solid #333; }
+    .x-header-img { height: 120px; background: #333; margin: -20px -20px 15px; }
+    .x-name-row { display: flex; align-items: center; gap: 5px; font-size: 20px; font-weight: 700; }
+    .x-handle { color: #888; font-size: 15px; margin-top: 2px; }
+    .x-tweet { padding: 15px 20px; border-bottom: 1px solid #333; display: flex; gap: 10px; }
+    .x-avatar { width: 40px; height: 40px; border-radius: 50%; background: #555; flex-shrink: 0; }
+    .x-tweet-content { flex: 1; }
+    .x-tweet-head { font-size: 15px; margin-bottom: 4px; }
+    .x-tweet-head span { color: #888; margin-left: 5px; }
+    .x-tweet-body { font-size: 15px; line-height: 1.4; margin-bottom: 10px; }
+    .x-tweet-stats { display: flex; gap: 20px; color: #888; font-size: 13px; }
+
+    /* ================= 6. 相册 ================= */
+    #app-photos { background: #000; color: #fff; }
+    .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 2px; }
+    .album-cover { aspect-ratio: 1; background: #333; display: flex; flex-direction: column; justify-content: flex-end; padding: 15px; position: relative; background-size: cover; background-position: center; cursor: pointer; }
+    .album-cover::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.7), transparent); }
+    .album-title { position: relative; z-index: 2; font-weight: 600; font-size: 16px; }
+
+    /* ================= 7. Instagram 视频通话 ================= */
+    #app-insta { background: #000; color: #fff; justify-content: space-between; }
+    .insta-incoming { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-around; background: #111; z-index: 20; }
+    .insta-avatar { width: 120px; height: 120px; border-radius: 50%; background: var(--insta-gradient); display: flex; justify-content: center; align-items: center; font-size: 50px; animation: breathe 2s infinite; background-size: cover; background-position: center; }
+    @keyframes breathe { 0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,255,255,0.2); } 50% { transform: scale(1.05); box-shadow: 0 0 20px 10px rgba(255,255,255,0.1); } }
+    .insta-btns { display: flex; gap: 60px; margin-bottom: 50px; }
+    .insta-btn { width: 70px; height: 70px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 30px; color: #fff; cursor: pointer; }
+    .btn-hangup { background: #ff3b30; }
+    .btn-accept { background: #34c759; }
+    
+    .insta-video-call { position: absolute; inset: 0; z-index: 20; background: #000; display: none; flex-direction: column; }
+    .main-video { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
+    .pip-video { position: absolute; top: 50px; right: 20px; width: 100px; height: 140px; border-radius: 12px; background: #333; object-fit: cover; z-index: 22; border: 1px solid rgba(255,255,255,0.3); cursor: grab; }
+    .call-top-info { position: absolute; top: 50px; left: 0; width: 100%; text-align: center; z-index: 21; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+    .call-timer { font-size: 14px; color: #ccc; margin-top: 5px; }
+    .call-controls { position: absolute; bottom: 50px; width: 100%; display: flex; justify-content: center; gap: 20px; z-index: 21; }
+    .call-ctrl-btn { width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); display: flex; justify-content: center; align-items: center; font-size: 20px; color: #fff; }
+    
+    .insta-chat-overlay { position: absolute; bottom: 120px; left: 20px; width: 70%; z-index: 21; pointer-events: none; display: flex; flex-direction: column; gap: 10px; }
+    .insta-chat-msg { background: rgba(0,0,0,0.5); backdrop-filter: blur(5px); padding: 8px 12px; border-radius: 15px; font-size: 14px; align-self: flex-start; text-shadow: 0 1px 2px #000; transition: opacity 0.5s; }
+    .insta-chat-msg.me { align-self: flex-end; background: rgba(30, 100, 255, 0.6); }
+    .insta-input-area { position: absolute; bottom: 20px; left: 20px; right: 20px; display: flex; z-index: 22; }
+    .insta-input-area input { flex: 1; background: rgba(255,255,255,0.2); border: none; border-radius: 20px; padding: 10px 15px; color: #fff; outline: none; backdrop-filter: blur(10px); }
+
+    /* ================= 8. Spotify ================= */
+    #app-spotify { background: #121212; color: #fff; }
+    .spotify-header { padding: 50px 20px 20px; text-align: center; }
+    .sp-cover { width: 200px; height: 200px; background: linear-gradient(135deg, #333, #111); border-radius: 10px; margin: 0 auto 15px; display: flex; justify-content: center; align-items: center; font-size: 50px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); background-size: cover; background-position: center; }
+    .sp-title { font-size: 24px; font-weight: 700; margin-bottom: 5px; }
+    .sp-meta { font-size: 13px; color: #b3b3b3; }
+    .sp-controls-row { display: flex; align-items: center; justify-content: space-between; padding: 20px; }
+    .sp-play-btn { width: 60px; height: 60px; background: var(--spotify-green); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 24px; color: #000; cursor: pointer; }
+    .sp-song-list { padding: 0 20px; }
+    .sp-song { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #282828; cursor: pointer; }
+    .sp-song.active .sp-song-title { color: var(--spotify-green); }
+    .sp-song-info { flex: 1; margin-left: 10px; }
+    .sp-song-title { font-size: 16px; margin-bottom: 4px; display: flex; align-items: center; gap: 5px; }
+    .sp-song-artist { font-size: 13px; color: #b3b3b3; }
+    .sp-more { font-size: 20px; color: #b3b3b3; padding: 10px; }
+    
+    .sp-mini-player { position: absolute; bottom: 20px; left: 10px; right: 10px; background: #282828; border-radius: 10px; padding: 10px; display: none; align-items: center; z-index: 30; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+    .sp-mini-cover { width: 40px; height: 40px; border-radius: 5px; background: #555; background-size: cover; }
+    .sp-mini-info { flex: 1; margin-left: 10px; overflow: hidden; white-space: nowrap; }
+    .sp-mini-title { font-size: 14px; color: #fff; overflow: hidden; text-overflow: ellipsis; }
+    .sp-mini-artist { font-size: 11px; color: #b3b3b3; }
+    .sp-mini-progress { position: absolute; bottom: 0; left: 0; height: 2px; background: var(--spotify-green); width: 0%; }
+    
+    .sp-full-player { position: absolute; inset: 0; background: #121212; z-index: 40; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; transform: translateY(100%); transition: transform 0.3s; }
+    .sp-full-player.show { display: flex; transform: translateY(0); }
+    .sp-full-cover { width: 80%; aspect-ratio: 1; background: #333; border-radius: 10px; margin-bottom: 40px; background-size: cover; background-position: center; }
+    .sp-progress-bar { width: 100%; height: 4px; background: #555; border-radius: 2px; margin: 20px 0; position: relative; }
+    .sp-progress-fill { height: 100%; background: #fff; width: 0%; border-radius: 2px; }
+    .sp-time-row { width: 100%; display: flex; justify-content: space-between; font-size: 11px; color: #b3b3b3; }
+    .sp-main-controls { display: flex; align-items: center; justify-content: center; gap: 30px; margin-top: 20px; font-size: 30px; }
+    .sp-main-controls div { cursor: pointer; }
+
+    /* 推送通知 */
+    #push-notification { position: absolute; top: -100px; left: 10px; right: 10px; background: rgba(255,255,255,0.9); backdrop-filter: blur(20px); border-radius: 20px; padding: 15px; display: flex; align-items: center; gap: 15px; z-index: 9999; transition: top 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 5px 15px rgba(0,0,0,0.2); cursor: pointer; color: #000; }
+    #push-notification.show { top: 50px; }
+</style>
+</head>
+<body>
+
+<!-- ================= CONFIG 配置区 ================= -->
+<script>
+const CONFIG = {
+    wallpaper: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1080&auto=format&fit=crop",
+    photos: [
+        "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=400&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=400&auto=format&fit=crop"
+    ],
+    userName: "韩振",
+    weather: { place: "首尔", temp: "18°", desc: "晴", high: "21°", low: "12°" },
+    events: [ 
+        { time: "10:00", title: "第一期节目录制" }, 
+        { time: "18:30", title: "X Room 归还物品" } 
+    ],
+    calls: [
+        { group: "今天", items: [
+            { type: "发", name: "金道勋", time: "下午 2:30", count: "" },
+            { type: "收", name: "pd", time: "上午 10:15", count: "" },
+            { type: "未接", name: "换乘恋爱", time: "上午 9:00", count: "2" }
+        ]}
+    ],
+    chats: {
+        "不要回": [
+            { time: "2026年9月3日 21:30", from: "me", text: "明天见面吧？" },
+            { time: "2026年9月3日 21:32", from: "me", text: "吃你之前一直想吃的那家" },
+            { time: "2026年9月4日 18:00", from: "me", text: "今晚准时到" },
+            { time: "2026年9月4日 19:15", from: "me", text: "我到了" },
+            { time: "2026年9月6日 14:00", from: "me", text: "别闹脾气了我们都不是小孩了" },
+            { time: "2026年9月6日 14:05", from: "me", text: "嗯？" },
+            { time: "2026年9月6日 16:30", from: "other", text: "我不分手" },
+            { time: "2026年9月6日 16:35", from: "me", text: "听话" },
+            { time: "2026年9月6日 16:40", from: "other", text: "不要" },
+            { time: "2026年9月6日 16:45", from: "me", text: "宝宝" },
+            { time: "2026年10月6日 23:15", from: "other", text: "换乘恋爱节目组给我发邀请了，说如果做嘉宾的话每个人一集有50万出演费，想说你要和我一起参加吗？" },
+            { time: "2026年10月6日 23:16", from: "me", text: "？" },
+            { time: "2026年10月6日 23:20", from: "other", text: "哦不好意思 发错了" },
+            { time: "2026年10月6日 23:25", from: "me", text: "。" }
+        ],
+        "pd": [
+            { time: "2026年10月15日 14:00", from: "other", text: "明天录制第一期的事先采访 不用太紧张～我们没有具体的剧本所以想到什么说什么就可以" },
+            { time: "2026年10月15日 14:05", from: "me", text: "好的" },
+            { time: "2026年10月15日 14:10", from: "other", text: "注意一定要用x来指代哦 咖啡厅再见面录制时韩振xi一直在称呼道勋尼道勋尼 后期差点没办法救ㅋㅋㅋ" },
+            { time: "2026年10月15日 14:15", from: "me", text: "……好" },
+            { time: "2026年10月17日 09:00", from: "other", text: "韩振xi 布置x room的物品准备好了吗" },
+            { time: "2026年10月17日 09:05", from: "me", text: "好了 在客厅标了名字的盒子里放着" },
+            { time: "2026年10月17日 09:10", from: "other", text: "ok！" },
+            { time: "2026年10月28日 15:00", from: "me", text: "pd nim x room拿回来的这个不是我的衣服 是搞错了吗" },
+            { time: "2026年10月28日 15:05", from: "other", text: "诶是嘛 怎么会这样" },
+            { time: "2026年10月28日 15:06", from: "other", text: "稍等我看看" },
+            { time: "2026年10月28日 15:10", from: "me", text: "好呢" },
+            { time: "2026年10月28日 15:20", from: "other", text: "啊你的和道勋的搞错了" },
+            { time: "2026年10月28日 15:21", from: "other", text: "你们两个的衣服拿错了 因为给了我两件一模一样的校服" }
+        ],
+        "金道勋": [
+            { time: "2026年10月15日 20:00", from: "other", text: "昨天回去哭了吗" },
+            { time: "2026年10月15日 20:05", from: "me", text: "说什么呢" },
+            { time: "2026年10月15日 20:06", from: "other", text: "pd都和我讲过了" },
+            { time: "2026年10月15日 20:07", from: "other", text: "从咖啡厅走了以后你哭得很厉害" },
+            { time: "2026年10月15日 20:15", from: "me", text: "……都和她说了多少遍不要讲了" },
+            { time: "2026年10月15日 20:20", from: "other", text: "为什么呢" },
+            { time: "2026年10月15日 20:25", from: "me", text: "哪有那么多为什么 你又换号码了？" },
+            { time: "2026年10月15日 20:28", from: "other", text: "对啊 不换号码的话联系不到你" },
+            { time: "2026年10月15日 20:29", from: "other", text: "你拉黑我拉黑得这么彻底" },
+            { time: "2026年10月15日 20:35", from: "me", text: "都说没有了 是偏偏你的对话框发不出消息" },
+            { time: "2026年10月15日 20:40", from: "other", text: "明天见" },
+            { time: "2026年10月16日 22:30", from: "other", text: "？" },
+            { time: "2026年10月16日 22:35", from: "me", text: "？" },
+            { time: "2026年10月28日 15:30", from: "me", text: "你的校服在我这里" },
+            { time: "2026年10月28日 15:35", from: "other", text: "哈？" },
+            { time: "2026年10月28日 15:40", from: "me", text: "不知道 pd说拿错了 没人的话你过来拿吧 我的房间也没有人" },
+            { time: "2026年10月28日 15:45", from: "other", text: "ok" },
+            { time: "2026年11月5日 01:10", from: "other", text: "能来下客厅吗" },
+            { time: "2026年11月5日 01:15", from: "me", text: "怎么了" },
+            { time: "2026年11月5日 01:16", from: "other", text: "不能什么都不问直接来吗" },
+            { time: "2026年11月5日 01:20", from: "me", text: "应该不行 哲秀还在我们房间哭呢我离开很不好" },
+            { time: "2026年11月5日 01:22", from: "other", text: "你现在要管其他人哭都不管我哭了吗" },
+            { time: "2026年11月5日 01:25", from: "me", text: "你哭了？" },
+            { time: "2026年11月5日 01:26", from: "me", text: "怎么了" },
+            { time: "2026年11月5日 01:30", from: "other", text: "我们非要这样吗" },
+            { time: "2026年11月5日 01:32", from: "me", text: "什么啊" },
+            { time: "2026年11月5日 01:35", from: "other", text: "明天最终选择你不会选择我的对不对" },
+            { time: "2026年11月5日 01:40", from: "me", text: "说不定哦" },
+            { time: "2026年11月5日 01:42", from: "other", text: "不选我也可以 为什么就不能给我一个准确的答案呢" },
+            { time: "2026年11月5日 01:45", from: "me", text: "什么叫不选也可以 你有选择过我吗" },
+            { time: "2026年11月5日 01:46", from: "me", text: "从第一天开始" },
+            { time: "2026年11月5日 01:48", from: "other", text: "？" },
+            { time: "2026年11月5日 01:49", from: "other", text: "哇这孩子到底怎么回事？" },
+            { time: "2026年11月5日 01:50", from: "other", text: "你好好再重新看看" },
+            { time: "2026年11月5日 01:52", from: "other", text: "我到底有没有选择你", isLast: true }
+        ],
+        "换乘恋爱": [
+            { time: "2026年10月16日 09:00", from: "other", text: "欢迎您加入换乘恋爱这一季的录制，节目中的一切通知和个人任务将由此账户发送给您，如果有什么需求也可以联系此账户或pd账户。祝您能在这里获得美丽的姻缘！" },
+            { time: "2026年10月16日 21:00", from: "other", text: "您好，给x的一封信需要发送一份电子版给制作组以便后期制作字幕，感谢。" },
+            { time: "2026年10月16日 21:30", from: "me", text: "x是第一个珍贵我胜过我珍贵自己的人，会在禁止开空调痛苦的夏天，抓紧下课的短暂时间一遍又一遍跑向超市，不顾老板的大喊大叫，只顾铲着冰箱的冰块灌满我的保温杯，学生时期会将我和x的学生证以及过去考试的所有准考证特地放在单独的文件夹中保管，即使校内相对更安全路程更短暂，x也要坚持每晚牵着手一股脑全塞进自己的口袋将我送到楼下，再压大门关闭的最后时刻冲出门外，口袋里除了温暖的手掌，总是会刷新着不同口味的珍宝珠。x也是很坏的人，总是用这样的温暖和温柔包裹着我，夸赞着也有很邪恶阴暗面的我是天使，就算对他无理取闹发脾气也坚持着这点，反面提醒着我的不完美和残缺。希望x能够在这里遇到不像我一样总喜欢用恶魔触角攻击他的人，希望x能真正遇到他值得托付爱的天使。" },
+            { time: "2026年10月16日 22:00", from: "other", text: "您的x给您的信：\n好喜欢x。好讨厌x。在遇到x之前我总是信心满满认为对自己的情感是完全掌握的，是十分清楚的，但和x交往后总怀疑自己真的爱够了吗？真的爱满了吗？不然为什么感受不到这份爱的消耗见底呢，后来才明白真的爱一个人的话是爱不完的，连他身上的一根小绒毛都会珍爱得不行。上高中时认识了x，其他人灰暗的学生时代对我而言却是粉色的，和x交往的每一天我都很幸福，但又因为x怀疑自己是否能够配得上这份爱而痛苦，x是我人生中遇到过最善良最完美的人，可能是由于聊天时偶尔会对他讲你也可以坏一些也可以自私一些让他产生了自我怀疑。好讨厌x，总是让我牵挂着他的一举一动，好喜欢x，有点无法想象彻底没有他以后的生活，不过如果x已经整理好做好决定，希望他能拥有幸福的生活，我是不会祝福你有新姻缘的。" },
+            { time: "2026年10月16日 22:30", from: "other", text: "请选择第一天你的心动对象" },
+            { time: "2026年10月16日 22:45", from: "me", text: "李英熙 谢谢你今天和我换不喜欢的胡萝卜汁" },
+            { time: "2026年10月16日 22:50", from: "other", text: "你的x没有选择你" }
+        ]
+    },
+    tweets: [
+        { name: "韩振", handle: "@hanjin_", date: "10月16日", text: "第一天。首尔好冷。", likes: "1.2万", rts: "3,421" },
+        { name: "韩振", handle: "@hanjin_", date: "10月10日", text: "没有什么是永恒的。", likes: "8,821", rts: "1,002" }
+    ],
+    instagram: {
+        callerName: "金道勋",
+        avatar: "", 
+        video: "", 
+        myVideo: "", 
+        messages: [
+            { from: "other", text: "接电话啊。", delay: 3000 },
+            { from: "me", text: "干嘛。", delay: 5000 },
+            { from: "other", text: "想看看你。", delay: 6000 }
+        ]
+    },
+    spotify: {
+        playlistName: "x",
+        cover: "",
+        songs: [
+            { title: "Love wins all", artist: "IU", audio: "" },
+            { title: "To X", artist: "Taeyeon", audio: "" }
+        ]
+    }
+};
+</script>
+
+<!-- ================= 1. 锁屏 ================= -->
+<div id="lock-screen" class="screen active">
+    <div class="lock-time" id="l-time">00:00</div>
+    <div class="lock-date" id="l-date">10月24日 星期四</div>
+    <div class="lock-hint">向上滑动解锁</div>
+    <div class="home-indicator light" id="unlock-btn" style="background: transparent;"></div>
+</div>
+
+<!-- ================= 2. 桌面 ================= -->
+<div id="home-screen" class="screen dark-screen">
+    <div class="widgets">
+        <div class="widget w-weather">
+            <div class="place" id="w-place"></div>
+            <div class="temp" id="w-temp"></div>
+            <div class="desc" id="w-desc"></div>
+        </div>
+        <div class="widget w-events" id="w-events"></div>
+    </div>
+
+    <div class="app-grid">
+        <div class="app" onclick="openInsta()">
+            <div class="app-icon" style="background: var(--insta-gradient)">📷</div>
+            <div class="app-name">Instagram</div>
+        </div>
+        <div class="app" onclick="openApp('app-phone')">
+            <div class="app-icon" style="background:#34c759">📞</div>
+            <div class="app-name">电话</div>
+        </div>
+        <div class="app" onclick="openApp('app-kakao')">
+            <div class="app-icon" style="background:#fee500; color: #333">💬</div>
+            <div class="app-name">KakaoTalk</div>
+        </div>
+        <div class="app" onclick="openApp('app-x')">
+            <div class="app-icon" style="background:#000">𝕏</div>
+            <div class="app-name">X</div>
+        </div>
+        <div class="app" onclick="openApp('app-spotify')">
+            <div class="app-icon" style="background:#1db954">🎵</div>
+            <div class="app-name">Spotify</div>
+        </div>
+        <div class="app" onclick="openApp('app-photos')">
+            <div class="app-icon" style="background:#fff; color: #000">🌸</div>
+            <div class="app-name">相册</div>
+        </div>
+        <!-- 装饰图标 -->
+        <div class="app"><div class="app-icon" style="background:#ff0000">▶️</div><div class="app-name">YouTube</div></div>
+        <div class="app"><div class="app-icon" style="background:#8e8e93">⚙️</div><div class="app-name">设置</div></div>
+    </div>
+
+    <div class="dock">
+        <div class="app" onclick="openApp('app-phone')"><div class="app-icon" style="background:#34c759">📞</div></div>
+        <div class="app" onclick="openApp('app-kakao')"><div class="app-icon" style="background:#fee500; color: #333">💬</div></div>
+        <div class="app"><div class="app-icon" style="background:#34c759">✉️</div></div>
+        <div class="app"><div class="app-icon" style="background:#8e8e93">📷</div></div>
+    </div>
+    <div class="home-indicator light" onclick="goHome()"></div>
+</div>
+
+<!-- ================= 3. 电话 ================= -->
+<div id="app-phone" class="screen">
+    <div class="app-header">最近通话 <span>编辑</span></div>
+    <div class="app-body" id="phone-list"></div>
+    <div class="tab-bar">
+        <div class="tab-item active"><i>🕒</i>最近通话</div>
+        <div class="tab-item"><i>👤</i>通讯录</div>
+        <div class="tab-item"><i>⌨️</i>拨号键盘</div>
+        <div class="tab-item"><i>📞</i>语音留言</div>
+    </div>
+    <div class="home-indicator" onclick="goHome()"></div>
+</div>
+
+<!-- ================= 4. KakaoTalk ================= -->
+<div id="app-kakao" class="screen">
+    <div class="app-header kakao-header">好友 <span>⚙️</span></div>
+    <div class="app-body" id="kakao-body">
+        <div class="my-profile" onclick="alert('我的资料')">
+            <div class="profile-avatar">韩</div>
+            <div style="font-size: 18px; font-weight: bold;">韩振</div>
+        </div>
+        <div class="friend-item" onclick="openChatRoom('不要回')">
+            <div class="profile-avatar" style="background: #ccc;">🚫</div>
+            <div style="font-size: 16px;">不要回</div>
+        </div>
+        <div class="friend-item" onclick="openChatRoom('pd')">
+            <div class="profile-avatar" style="background: #ddd;">🎬</div>
+            <div style="font-size: 16px;">pd</div>
+        </div>
+        <div class="friend-item" onclick="openChatRoom('金道勋')">
+            <div class="profile-avatar" style="background: #fff;">🐶</div>
+            <div style="font-size: 16px;">金道勋</div>
+        </div>
+        <div class="friend-item" onclick="openChatRoom('换乘恋爱')">
+            <div class="profile-avatar" style="background: #ffb6c1;">💌</div>
+            <div style="font-size: 16px;">换乘恋爱</div>
+        </div>
+    </div>
+    <div class="home-indicator" onclick="goHome()"></div>
+</div>
+
+<!-- 聊天室界面 (初始不显示 active) -->
+<div id="kakao-chat-room" class="screen chat-room">
+    <div class="app-header" style="background:#b2c7d9; border:none;">
+        <span onclick="closeChatRoom()" style="cursor:pointer; font-size:24px;">&lt;</span>
+        <span id="chat-title">名字</span>
+        <span>≡</span>
+    </div>
+    <div class="chat-messages" id="chat-msgs"></div>
+    <div class="chat-input-area">
+        <input type="text" id="chat-input" placeholder="输入消息">
+        <button onclick="sendKakaoMsg()">发送</button>
+    </div>
+</div>
+
+<!-- ================= 5. X (Twitter) ================= -->
+<div id="app-x" class="screen dark-screen">
+    <div class="app-header">
+        <span style="font-size: 24px;">𝕏</span>
+        <span>🔒</span>
+    </div>
+    <div class="app-body">
+        <div class="x-profile">
+            <div class="x-header-img"></div>
+            <div class="x-name-row">韩振 <span style="font-size:16px;">🔒</span></div>
+            <div class="x-handle">@hanjin_</div>
+            <div style="margin-top: 15px; font-size: 15px; line-height: 1.4;">
+                私密账号。请先发送关注请求。<br>换乘恋爱ing
+            </div>
+        </div>
+        <div id="x-tweets"></div>
+    </div>
+    <div class="home-indicator light" onclick="goHome()"></div>
+</div>
+
+<!-- ================= 6. 相册 ================= -->
+<div id="app-photos" class="screen dark-screen">
+    <div class="app-header" style="border:none;">精选集 <span>选择</span></div>
+    <div class="app-body" style="padding: 10px;">
+        <div class="photo-grid" id="album-grid"></div>
+    </div>
+    <div class="home-indicator light" onclick="goHome()"></div>
+</div>
+
+<!-- 相册详情页 -->
+<div id="album-detail" class="screen dark-screen" style="z-index: 50; background: #000;">
+    <div class="app-header" style="border:none;">
+        <span onclick="closeAlbum()" style="cursor:pointer; font-size:24px; color:#007aff;">&lt; 精选集</span>
+        <span>选择</span>
+    </div>
+    <div class="app-body" style="padding: 2px;">
+        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 2px;" id="photo-list"></div>
+    </div>
+</div>
+
+<!-- ================= 7. Instagram 视频通话 ================= -->
+<div id="app-insta" class="screen dark-screen">
+    <!-- 来电界面 -->
+    <div id="insta-incoming" class="insta-incoming">
+        <div style="text-align: center; margin-top: 50px;">
+            <div class="insta-avatar" id="insta-avatar-text">金</div>
+            <h2 id="insta-caller-name" style="margin-top: 20px; font-size: 24px;">金道勋</h2>
+            <p style="color: #aaa; margin-top: 10px;">Instagram 视频通话</p>
+            <p style="color: #34c759; margin-top: 20px; font-size: 14px; animation: pulse 1s infinite;">来电中…</p>
+        </div>
+        <div class="insta-btns">
+            <div class="insta-btn btn-hangup" onclick="goHome()">❌</div>
+            <div class="insta-btn btn-accept" onclick="acceptInstaCall()">📞</div>
+        </div>
+    </div>
+
+    <!-- 通话界面 -->
+    <div id="insta-video-call" class="insta-video-call">
+        <video id="main-video" class="main-video" autoplay loop playsinline muted></video>
+        <video id="pip-video" class="pip-video" autoplay loop playsinline muted></video>
+        
+        <div class="call-top-info">
+            <div style="font-size: 20px; font-weight: bold;" id="insta-call-name">金道勋</div>
+            <div class="call-timer" id="call-timer">00:00</div>
+        </div>
+
+        <div class="insta-chat-overlay" id="insta-chat-overlay"></div>
+        
+        <div class="insta-input-area">
+            <input type="text" id="insta-input" placeholder="发消息…" onkeypress="if(event.key==='Enter') sendInstaMsg()">
+        </div>
+
+        <div class="call-controls">
+            <div class="call-ctrl-btn">🔄</div>
+            <div class="call-ctrl-btn">🎤</div>
+            <div class="call-ctrl-btn">📷</div>
+            <div class="call-ctrl-btn btn-hangup" onclick="endInstaCall()">❌</div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= 8. Spotify ================= -->
+<div id="app-spotify" class="screen dark-screen">
+    <div class="app-body" style="padding-bottom: 100px;">
+        <div class="spotify-header">
+            <div class="sp-cover" id="sp-cover">🎵</div>
+            <div class="sp-title" id="sp-title"></div>
+            <div class="sp-meta">韩振 · 1곡, 3분</div>
+        </div>
+        <div class="sp-controls-row">
+            <div style="font-size:20px;">⬇️</div>
+            <div style="font-size:20px;">➕</div>
+            <div style="font-size:20px;">···</div>
+            <div class="sp-play-btn" onclick="playSpotify(0)">▶️</div>
+            <div style="font-size:20px;">🔀</div>
+        </div>
+        <div class="sp-song-list" id="sp-list"></div>
+    </div>
+
+    <!-- 底部迷你播放条 -->
+    <div class="sp-mini-player" id="sp-mini" onclick="openFullPlayer()">
+        <div class="sp-mini-cover" id="sp-mini-cover"></div>
+        <div class="sp-mini-info">
+            <div class="sp-mini-title" id="sp-mini-title"></div>
+            <div class="sp-mini-artist" id="sp-mini-artist"></div>
+        </div>
+        <div style="font-size:24px;" onclick="event.stopPropagation(); togglePlay()" id="sp-mini-btn">⏸</div>
+        <div class="sp-mini-progress" id="sp-mini-progress"></div>
+    </div>
+
+    <!-- 全屏播放页 -->
+    <div class="sp-full-player" id="sp-full">
+        <div style="position: absolute; top: 50px; left: 20px; font-size: 24px;" onclick="closeFullPlayer()">↓</div>
+        <div class="sp-full-cover" id="sp-full-cover"></div>
+        <div style="width: 100%; text-align: left; font-size: 24px; font-weight: bold; margin-bottom: 5px;" id="sp-full-title"></div>
+        <div style="width: 100%; text-align: left; font-size: 16px; color: #b3b3b3;" id="sp-full-artist"></div>
+        
+        <div class="sp-progress-bar" id="sp-progress-bar">
+            <div class="sp-progress-fill" id="sp-progress-fill"></div>
+        </div>
+        <div class="sp-time-row">
+            <span id="sp-curr-time">0:00</span>
+            <span id="sp-total-time">3:00</span>
+        </div>
+        
+        <div class="sp-main-controls">
+            <div>🔀</div>
+            <div>⏮</div>
+            <div onclick="togglePlay()" id="sp-main-btn">⏸</div>
+            <div>⏭</div>
+            <div>🔁</div>
+        </div>
+    </div>
+
+    <div class="home-indicator light" onclick="goHome()" style="z-index: 50;"></div>
+</div>
+
+<audio id="bg-audio"></audio>
+
+<!-- 推送通知 -->
+<div id="push-notification" onclick="openApp('app-kakao'); openChatRoom('换乘恋爱'); hidePush();">
+    <div style="width: 40px; height: 40px; background: #ffb6c1; border-radius: 10px; display: flex; justify-content: center; align-items: center; font-size: 20px;">💌</div>
+    <div style="flex: 1;">
+        <div style="font-weight: 600; font-size: 14px;">换乘恋爱</div>
+        <div style="font-size: 13px; color: #555; margin-top: 2px;">你的x选择了你</div>
+    </div>
+</div>
+
+<script>
+// ================= 强制初始化，防止默认卡在聊天室 =================
+window.onload = function() {
+    document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+    document.getElementById('lock-screen').classList.add('active');
+    document.getElementById('kakao-chat-room').classList.remove('active');
+};
+
+// 基础逻辑
+document.getElementById('home-screen').style.backgroundImage = `url(${CONFIG.wallpaper})`;
+document.getElementById('lock-screen').style.backgroundImage = `url(${CONFIG.wallpaper})`;
+
+// 实时时间
+function updateTime() {
+    const d = new Date();
+    const h = String(d.getHours()).padStart(2,'0');
+    const m = String(d.getMinutes()).padStart(2,'0');
+    document.getElementById('l-time').innerText = `${h}:${m}`;
+    const days = ['日','一','二','三','四','五','六'];
+    document.getElementById('l-date').innerText = `${d.getMonth()+1}月${d.getDate()}日 星期${days[d.getDay()]}`;
+}
+setInterval(updateTime, 1000); updateTime();
+
+// 滑动解锁
+let touchStart = 0;
+const lockScreen = document.getElementById('lock-screen');
+lockScreen.addEventListener('touchstart', e => touchStart = e.touches[0].clientY);
+lockScreen.addEventListener('touchmove', e => {
+    if(touchStart - e.touches[0].clientY > 50) {
+        lockScreen.classList.remove('active');
+        document.getElementById('home-screen').classList.add('active');
+    }
+});
+document.getElementById('unlock-btn').addEventListener('click', () => {
+    lockScreen.classList.remove('active');
+    document.getElementById('home-screen').classList.add('active');
+});
+
+// 页面跳转
+function openApp(id) {
+    document.getElementById(id).classList.add('active');
+}
+function goHome() {
+    document.querySelectorAll('.screen').forEach(el => {
+        if(el.id !== 'lock-screen' && el.id !== 'album-detail') el.classList.remove('active');
+    });
+    document.getElementById('insta-video-call').style.display = 'none';
+    document.getElementById('insta-incoming').style.display = 'flex';
+    document.getElementById('sp-full').classList.remove('show');
+    document.getElementById('bg-audio').pause();
+}
+
+// ================= 桌面小组件 =================
+document.getElementById('w-place').innerText = CONFIG.weather.place;
+document.getElementById('w-temp').innerText = CONFIG.weather.temp;
+document.getElementById('w-desc').innerText = `${CONFIG.weather.desc} 最高:${CONFIG.weather.high} 最低:${CONFIG.weather.low}`;
+let evHtml = '';
+CONFIG.events.forEach(e => evHtml += `<div class="ev"><span class="t">${e.time}</span><span>${e.title}</span></div>`);
+document.getElementById('w-events').innerHTML = evHtml;
+
+// ================= 电话 =================
+let callHtml = '';
+CONFIG.calls.forEach(g => {
+    callHtml += `<div class="call-group">${g.group}</div>`;
+    g.items.forEach(i => {
+        const isMissed = i.type === '未接' ? 'missed' : '';
+        callHtml += `<div class="call-item ${isMissed}">
+            <div>${i.name} ${i.count ? `<span class="count">(${i.count})</span>`:''}</div>
+            <div style="font-size: 13px; color: #888;">${i.time} <span style="margin-left:10px;">ⓘ</span></div>
+        </div>`;
+    });
+});
+document.getElementById('phone-list').innerHTML = callHtml;
+
+// ================= KakaoTalk =================
+let currentChatContact = '';
+
+function openChatRoom(contact) {
+    currentChatContact = contact;
+    document.getElementById('chat-title').innerText = contact;
+    document.getElementById('app-kakao').classList.remove('active');
+    document.getElementById('kakao-chat-room').classList.add('active');
+    
+    const msgs = CONFIG.chats[contact] || [];
+    const box = document.getElementById('chat-msgs');
+    box.innerHTML = '';
+    
+    let lastDate = '';
+    msgs.forEach(c => {
+        const datePart = c.time.split(' ')[0];
+        if(datePart !== lastDate) {
+            box.innerHTML += `<div class="date-divider"><span>${datePart}</span></div>`;
+            lastDate = datePart;
+        }
+        
+        const isMe = c.from === 'me';
+        box.innerHTML += `<div class="msg-row ${isMe ? 'me' : ''}">
+            ${!isMe ? '<div class="msg-info"><span></span><span>1</span></div>' : ''}
+            <div class="msg-bubble">${c.text}</div>
+            <div class="msg-info"><span>${c.time.split(' ')[1] || ''}</span></div>
+        </div>`;
+    });
+    box.scrollTop = box.scrollHeight;
+
+    if(contact === '金道勋') {
+        setTimeout(() => {
+            document.getElementById('push-notification').classList.add('show');
+        }, 2500);
+    }
+}
+
+function closeChatRoom() {
+    document.getElementById('kakao-chat-room').classList.remove('active');
+    document.getElementById('app-kakao').classList.add('active');
+}
+
+function sendKakaoMsg() {
+    const input = document.getElementById('chat-input');
+    if(!input.value.trim()) return;
+    const box = document.getElementById('chat-msgs');
+    box.innerHTML += `<div class="msg-row me">
+        <div class="msg-bubble">${input.value}</div>
+        <div class="msg-info"><span>刚刚</span></div>
+    </div>`;
+    input.value = '';
+    box.scrollTop = box.scrollHeight;
+}
+
+function hidePush() {
+    document.getElementById('push-notification').classList.remove('show');
+}
+
+// ================= X (Twitter) =================
+let xHtml = '';
+CONFIG.tweets.forEach(t => {
+    xHtml += `<div class="x-tweet">
+        <div class="x-avatar"></div>
+        <div class="x-tweet-content">
+            <div class="x-tweet-head">${t.name} <span>${t.handle} · ${t.date}</span></div>
+            <div class="x-tweet-body">${t.text}</div>
+            <div class="x-tweet-stats">
+                <span>💬 12</span><span>🔁 ${t.rts}</span><span>❤️ ${t.likes}</span>
+            </div>
+        </div>
+    </div>`;
+});
+document.getElementById('x-tweets').innerHTML = xHtml;
+
+// ================= 相册 =================
+const albumCover = `https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=400&auto=format&fit=crop`;
+document.getElementById('album-grid').innerHTML = `
+    <div class="album-cover" style="background-image: url('${albumCover}')" onclick="openAlbumDetail()">
+        <div class="album-title">to X</div>
+        <div style="position: relative; z-index: 2; font-size: 12px; color: #ccc;">${CONFIG.photos.length}张照片</div>
+    </div>
+`;
+function openAlbumDetail() {
+    document.getElementById('app-photos').classList.remove('active');
+    document.getElementById('album-detail').classList.add('active');
+    let photosHtml = '';
+    CONFIG.photos.forEach(p => {
+        photosHtml += `<div style="aspect-ratio: 1; background: url('${p}') center/cover;"></div>`;
+    });
+    document.getElementById('photo-list').innerHTML = photosHtml;
+}
+function closeAlbum() {
+    document.getElementById('album-detail').classList.remove('active');
+    document.getElementById('app-photos').classList.add('active');
+}
+
+// ================= Instagram 视频通话 =================
+let instaTimer, callSeconds = 0;
+function openInsta() {
+    openApp('app-insta');
+    document.getElementById('insta-video-call').style.display = 'none';
+    document.getElementById('insta-incoming').style.display = 'flex';
+    document.getElementById('insta-caller-name').innerText = CONFIG.instagram.callerName;
+    document.getElementById('insta-avatar-text').innerText = CONFIG.instagram.callerName.charAt(0);
+}
+
+function acceptInstaCall() {
+    document.getElementById('insta-incoming').style.display = 'none';
+    document.getElementById('insta-video-call').style.display = 'flex';
+    document.getElementById('insta-call-name').innerText = CONFIG.instagram.callerName;
+    
+    const mainV = document.getElementById('main-video');
+    const pipV = document.getElementById('pip-video');
+    if(CONFIG.instagram.video) { mainV.src = CONFIG.instagram.video; mainV.play().catch(()=>{}); }
+    if(CONFIG.instagram.myVideo) { pipV.src = CONFIG.instagram.myVideo; pipV.play().catch(()=>{}); }
+
+    callSeconds = 0;
+    document.getElementById('call-timer').innerText = `00:00`;
+    instaTimer = setInterval(() => {
+        callSeconds++;
+        const m = String(Math.floor(callSeconds/60)).padStart(2,'0');
+        const s = String(callSeconds%60).padStart(2,'0');
+        document.getElementById('call-timer').innerText = `${m}:${s}`;
+    }, 1000);
+
+    let delaySum = 0;
+    CONFIG.instagram.messages.forEach((msg) => {
+        delaySum += msg.delay;
+        setTimeout(() => { showInstaMsg(msg.from, msg.text); }, delaySum);
+    });
+}
+
+function showInstaMsg(from, text) {
+    const overlay = document.getElementById('insta-chat-overlay');
+    const div = document.createElement('div');
+    div.className = `insta-chat-msg ${from === 'me' ? 'me' : ''}`;
+    div.innerText = text;
+    overlay.appendChild(div);
+    setTimeout(() => { div.style.opacity = '0'; }, 4000);
+    setTimeout(() => { div.remove(); }, 4500);
+}
+
+function sendInstaMsg() {
+    const input = document.getElementById('insta-input');
+    if(!input.value.trim()) return;
+    showInstaMsg('me', input.value);
+    input.value = '';
+}
+
+function endInstaCall() {
+    clearInterval(instaTimer);
+    goHome();
+}
+
+// 拖动小窗 (PIP)
+const pip = document.getElementById('pip-video');
+let isDragging = false, pipX = 0, pipY = 0;
+pip.addEventListener('touchstart', e => {
+    isDragging = true;
+    pipX = e.touches[0].clientX - pip.offsetLeft;
+    pipY = e.touches[0].clientY - pip.offsetTop;
+});
+pip.addEventListener('touchmove', e => {
+    if(!isDragging) return;
+    pip.style.left = (e.touches[0].clientX - pipX) + 'px';
+    pip.style.top = (e.touches[0].clientY - pipY) + 'px';
+    pip.style.right = 'auto';
+});
+pip.addEventListener('touchend', () => isDragging = false);
+
+// ================= Spotify =================
+let spCurrent = -1, spPlaying = false, spInterval, spTime = 0, spTotal = 180;
+document.getElementById('sp-title').innerText = CONFIG.spotify.playlistName;
+if(CONFIG.spotify.cover) document.getElementById('sp-cover').style.backgroundImage = `url(${CONFIG.spotify.cover})`;
+
+let spListHtml = '';
+CONFIG.spotify.songs.forEach((song, i) => {
+    spListHtml += `<div class="sp-song" id="sp-song-${i}" onclick="playSpotify(${i})">
+        <div class="sp-song-info">
+            <div class="sp-song-title" id="sp-title-${i}">${song.title}</div>
+            <div class="sp-song-artist">${song.artist}</div>
+        </div>
+        <div class="sp-more">···</div>
+    </div>`;
+});
+document.getElementById('sp-list').innerHTML = spListHtml;
+
+function playSpotify(index) {
+    spCurrent = index;
+    spTime = 0;
+    spPlaying = true;
+    
+    CONFIG.spotify.songs.forEach((_, i) => {
+        document.getElementById(`sp-song-${i}`).classList.remove('active');
+    });
+    document.getElementById(`sp-song-${spCurrent}`).classList.add('active');
+    
+    const song = CONFIG.spotify.songs[spCurrent];
+    document.getElementById('sp-mini').style.display = 'flex';
+    document.getElementById('sp-mini-title').innerText = song.title;
+    document.getElementById('sp-mini-artist').innerText = song.artist;
+    document.getElementById('sp-full-title').innerText = song.title;
+    document.getElementById('sp-full-artist').innerText = song.artist;
+    
+    const audio = document.getElementById('bg-audio');
+    if(song.audio) {
+        audio.src = song.audio;
+        audio.play();
+        spTotal = audio.duration || 180;
+    } else {
+        audio.src = '';
+        spTotal = 180; 
+    }
+    
+    updatePlayIcons();
+    clearInterval(spInterval);
+    spInterval = setInterval(() => {
+        if(spPlaying) {
+            spTime++;
+            if(spTime >= spTotal) { nextSong(); }
+            updateProgress();
+        }
+    }, 1000);
+}
+
+function togglePlay() {
+    if(spCurrent === -1) playSpotify(0);
+    spPlaying = !spPlaying;
+    const audio = document.getElementById('bg-audio');
+    if(spPlaying && CONFIG.spotify.songs[spCurrent].audio) audio.play();
+    else audio.pause();
+    updatePlayIcons();
+}
+
+function updatePlayIcons() {
+    const icon = spPlaying ? '⏸' : '▶️';
+    document.getElementById('sp-mini-btn').innerText = icon;
+    document.getElementById('sp-main-btn').innerText = icon;
+}
+
+function updateProgress() {
+    const percent = (spTime / spTotal) * 100;
+    document.getElementById('sp-mini-progress').style.width = `${percent}%`;
+    document.getElementById('sp-progress-fill').style.width = `${percent}%`;
+    const m = Math.floor(spTime/60), s = String(spTime%60).padStart(2,'0');
+    document.getElementById('sp-curr-time').innerText = `${m}:${s}`;
+    const tm = Math.floor(spTotal/60), ts = String(spTotal%60).padStart(2,'0');
+    document.getElementById('sp-total-time').innerText = `${tm}:${ts}`;
+}
+
+function nextSong() {
+    playSpotify((spCurrent + 1) % CONFIG.spotify.songs.length);
+}
+
+function openFullPlayer() { document.getElementById('sp-full').classList.add('show'); }
+function closeFullPlayer() { document.getElementById('sp-full').classList.remove('show'); }
+
+</script>
+</body>
+</html>
