@@ -592,6 +592,8 @@ setInterval(updateTime, 1000); updateTime();
 // 滑动解锁
 let touchStart = 0;
 const lockScreen = document.getElementById('lock-screen');
+    document.getElementById('kakao-chat-room').classList.remove('active');
+document.getElementById('app-kakao').classList.remove('active');
 lockScreen.addEventListener('touchstart', e => touchStart = e.touches[0].clientY);
 lockScreen.addEventListener('touchmove', e => {
     if(touchStart - e.touches[0].clientY > 50) {
