@@ -27,7 +27,7 @@
     .home-indicator.light { background: rgba(255,255,255,0.8); }
 
     /* ================= 1. 锁屏 ================= */
-    #lock-screen { background-size: cover; background-position: center; justify-content: center; align-items: center; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+    #lock-screen { background-size: cover; background-position: center; justify-content: center; align-items: center; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.5); z-index: 100; }
     .lock-time { font-size: 80px; font-weight: 300; letter-spacing: 2px; }
     .lock-date { font-size: 20px; margin-top: 5px; }
     .lock-hint { position: absolute; bottom: 50px; font-size: 14px; animation: pulse 2s infinite; }
@@ -88,11 +88,6 @@
     .chat-input-area { display: flex; padding: 10px; background: #fff; align-items: center; }
     .chat-input-area input { flex: 1; border: none; outline: none; font-size: 15px; padding: 10px; }
     .chat-input-area button { background: var(--kakao-yellow); border: none; padding: 8px 15px; border-radius: 5px; font-weight: bold; cursor: pointer; }
-
-    /* 全屏资料页 */
-    .full-profile { background: #fff; position: absolute; inset: 0; z-index: 100; display: none; flex-direction: column; }
-    .full-profile.show { display: flex; }
-    .fp-header { height: 300px; background: #b2c7d9; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 
     /* ================= 5. X (Twitter) ================= */
     #app-x { background: #000; color: #fff; }
@@ -182,9 +177,7 @@
 <!-- ================= CONFIG 配置区 ================= -->
 <script>
 const CONFIG = {
-    // 壁纸 (可替换)
     wallpaper: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1080&auto=format&fit=crop",
-    // 相册照片 (可添加更多)
     photos: [
         "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=400&auto=format&fit=crop",
         "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=400&auto=format&fit=crop"
@@ -202,7 +195,6 @@ const CONFIG = {
             { type: "未接", name: "换乘恋爱", time: "上午 9:00", count: "2" }
         ]}
     ],
-    // 各个联系人的聊天记录
     chats: {
         "不要回": [
             { time: "2026年9月3日 21:30", from: "me", text: "明天见面吧？" },
@@ -407,7 +399,7 @@ const CONFIG = {
     <div class="home-indicator" onclick="goHome()"></div>
 </div>
 
-<!-- 聊天室界面 -->
+<!-- 聊天室界面 (初始不显示 active) -->
 <div id="kakao-chat-room" class="screen chat-room">
     <div class="app-header" style="background:#b2c7d9; border:none;">
         <span onclick="closeChatRoom()" style="cursor:pointer; font-size:24px;">&lt;</span>
@@ -445,9 +437,7 @@ const CONFIG = {
 <div id="app-photos" class="screen dark-screen">
     <div class="app-header" style="border:none;">精选集 <span>选择</span></div>
     <div class="app-body" style="padding: 10px;">
-        <div class="photo-grid" id="album-grid">
-            <!-- 动态生成 -->
-        </div>
+        <div class="photo-grid" id="album-grid"></div>
     </div>
     <div class="home-indicator light" onclick="goHome()"></div>
 </div>
@@ -459,9 +449,7 @@ const CONFIG = {
         <span>选择</span>
     </div>
     <div class="app-body" style="padding: 2px;">
-        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 2px;" id="photo-list">
-            <!-- 动态生成 -->
-        </div>
+        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 2px;" id="photo-list"></div>
     </div>
 </div>
 
@@ -574,7 +562,14 @@ const CONFIG = {
 </div>
 
 <script>
-// ================= 初始化基础逻辑 =================
+// ================= 强制初始化，防止默认卡在聊天室 =================
+window.onload = function() {
+    document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+    document.getElementById('lock-screen').classList.add('active');
+    document.getElementById('kakao-chat-room').classList.remove('active');
+};
+
+// 基础逻辑
 document.getElementById('home-screen').style.backgroundImage = `url(${CONFIG.wallpaper})`;
 document.getElementById('lock-screen').style.backgroundImage = `url(${CONFIG.wallpaper})`;
 
@@ -592,8 +587,6 @@ setInterval(updateTime, 1000); updateTime();
 // 滑动解锁
 let touchStart = 0;
 const lockScreen = document.getElementById('lock-screen');
-    document.getElementById('kakao-chat-room').classList.remove('active');
-document.getElementById('app-kakao').classList.remove('active');
 lockScreen.addEventListener('touchstart', e => touchStart = e.touches[0].clientY);
 lockScreen.addEventListener('touchmove', e => {
     if(touchStart - e.touches[0].clientY > 50) {
@@ -657,7 +650,6 @@ function openChatRoom(contact) {
     
     let lastDate = '';
     msgs.forEach(c => {
-        // 提取日期部分 (例如 "2026年9月3日")
         const datePart = c.time.split(' ')[0];
         if(datePart !== lastDate) {
             box.innerHTML += `<div class="date-divider"><span>${datePart}</span></div>`;
@@ -673,11 +665,10 @@ function openChatRoom(contact) {
     });
     box.scrollTop = box.scrollHeight;
 
-    // 特殊彩蛋触发
     if(contact === '金道勋') {
         setTimeout(() => {
             document.getElementById('push-notification').classList.add('show');
-        }, 2500); // 2.5秒后弹出推送
+        }, 2500);
     }
 }
 
@@ -719,7 +710,7 @@ CONFIG.tweets.forEach(t => {
 document.getElementById('x-tweets').innerHTML = xHtml;
 
 // ================= 相册 =================
-const albumCover = `https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=400&auto=format&fit=crop`; // 默认封面
+const albumCover = `https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=400&auto=format&fit=crop`;
 document.getElementById('album-grid').innerHTML = `
     <div class="album-cover" style="background-image: url('${albumCover}')" onclick="openAlbumDetail()">
         <div class="album-title">to X</div>
